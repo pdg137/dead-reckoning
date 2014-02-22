@@ -69,39 +69,70 @@ void setup() {
   sei();
 }
 
-void loop() {
-  
-  if(count1 > 0 && count1 <= 50)
+#define min(a, b) ((a)<(b)?(a):(b))
+#define max(a, b) ((a)>(b)?(a):(b))
+
+void setMotors(int left, int right)
+{
+  if(left < 0)
   {
     digitalWrite(4, LOW);
-    OCR1A = count1*8;
+    OCR1A = min(-left, 400);
   }
-  else if(count1 < 0 && count1 >= -50)
+  else
   {
     digitalWrite(4, HIGH);
-    OCR1A = -count1*8;
+    OCR1A = min(left, 400);
   }
-  else
-    OCR1A = 0;
   
-  if(count2 > 0 && count2 <= 50)
+  if(right < 0)
   {
     digitalWrite(5, LOW);
-    OCR1B = count2*8;
-  }
-  else if(count2 < 0 && count2 >= -50)
-  {
-    digitalWrite(5, HIGH);
-    OCR1B = -count2*8;
+    OCR1B = min(-right, 400);
   }
   else
-    OCR1B = 0;
+  {
+    digitalWrite(5, HIGH);
+    OCR1B = min(right, 400);
+  }
+}
+
+int last_millis=0;
+int counts_expected=0;
+int s = 0;
+
+void loop() {
+  
+  // shoot for 10 RPM
+  // 36 counts/s
+  
+  int t = millis();
+  
+  if(t - last_millis > 60)
+  {
+      last_millis += 60;
+      counts_expected += 1;
+  }
+  if(count1 < counts_expected)
+  {
+    s += 1;
+  }
+  else if(count1 > counts_expected)
+  {
+    s -= 1;
+  }
+  if(s < -10) s = -10;
+  if(s > 10) s= 10;
+  setMotors(s + 15*(counts_expected - count1), 0);
   
   if(last_count1 != count1 || last_count2 != count2)
   {
     Serial.print(count1);
     Serial.write(" ");
-    Serial.println(count2);
+    Serial.print(count2);
+    Serial.write(" ");
+    Serial.print(counts_expected);
+    Serial.println("");
     last_count1 = count1;
     last_count2 = count2;
   }
