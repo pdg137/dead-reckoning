@@ -1,12 +1,10 @@
-uint8_t x = HIGH;
-
-int count1 = 0;
-int count2 = 0;
-int last_count1 = 1;
-int last_count2 = 1;
+int8_t count1 = 0;
+int8_t count2 = 0;
+int8_t last_count1 = 1;
+int8_t last_count2 = 1;
 uint8_t last11, last12, last21, last22;
-int error1 = 0;
-int error2 = 0;
+uint8_t error1 = 0;
+uint8_t error2 = 0;
 
 // Encoder 1 uses INT0 and INT1
 ISR(INT1_vect,ISR_ALIASOF(INT0_vect));
@@ -97,44 +95,72 @@ void setMotors(int left, int right)
   }
 }
 
-int last_millis=0;
-int counts_expected=0;
-int s = 0;
+// 30000:1
+#define ANGLE_SCALE 20000
+#define STEPS_PER_RADIAN 200
+int16_t c=ANGLE_SCALE;
+int16_t s=0;
+int16_t x=0, y=0;
 
-void loop() {
+#define sign(x) ((x)<0?-1:1)
+
+int16_t divide(int16_t a, int16_t b)
+{
+  return (a + sign(a)*(b/2-1)) / b;
+}
+
+void ticks1(int8_t n) {
+  n = sign(n);
   
-  // shoot for 10 RPM
-  // 36 counts/s
+  int16_t dc = + divide(n*s - n*c/2/STEPS_PER_RADIAN, STEPS_PER_RADIAN);
+  int16_t ds = - divide(n*c + n*s/2/STEPS_PER_RADIAN, STEPS_PER_RADIAN);
   
-  int t = millis();
+  c += dc;
+  s += ds;
+  x += n * c;
+  y += n * s;
+//  c = max(-ANGLE_SCALE, min(ANGLE_SCALE, c));
+//  s = max(-ANGLE_SCALE, min(ANGLE_SCALE, s));
   
-  if(t - last_millis > 60)
-  {
-      last_millis += 60;
-      counts_expected += 1;
-  }
-  if(count1 < counts_expected)
-  {
-    s += 1;
-  }
-  else if(count1 > counts_expected)
-  {
-    s -= 1;
-  }
-  if(s < -10) s = -10;
-  if(s > 10) s= 10;
-  setMotors(s + 15*(counts_expected - count1), 0);
+  last_count1 += n;  
+}
+
+void ticks2(int8_t n) {
+  if(n > 1)
+    n = 1;
+  if(n < -1)
+    n = -1;
   
+  int16_t dc = - divide(n*s + n*c/2/STEPS_PER_RADIAN, STEPS_PER_RADIAN);
+  int16_t ds = + divide(n*c - n*s/2/STEPS_PER_RADIAN, STEPS_PER_RADIAN);
+  c += dc;
+  s += ds;
+  x += n * c;
+  y += n * s;
+//  c = max(-ANGLE_SCALE, min(ANGLE_SCALE, c));
+//  s = max(-ANGLE_SCALE, min(ANGLE_SCALE, s));
+  
+  last_count2 += n;
+}
+
+void positionUpdate() {
+  if(count1 != last_count1) ticks1(count1 - last_count1);
+  if(count2 != last_count2) ticks2(count2 - last_count2);
+}
+
+void encoderUpdate() {
   if(last_count1 != count1 || last_count2 != count2)
   {
-    Serial.print(count1);
+    positionUpdate();
+    
+    Serial.print(last_count1);
     Serial.write(" ");
-    Serial.print(count2);
+    Serial.print(last_count2);
     Serial.write(" ");
-    Serial.print(counts_expected);
+    Serial.print(s);
+    Serial.write(" ");
+    Serial.print(c);
     Serial.println("");
-    last_count1 = count1;
-    last_count2 = count2;
   }
   
   if(error1)
@@ -147,4 +173,8 @@ void loop() {
     Serial.println("Error 2");
     error2 = 0;
   }
+}
+
+void loop() {
+  encoderUpdate();
 }
