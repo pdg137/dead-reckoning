@@ -97,10 +97,10 @@ void setMotors(int left, int right)
 
 // 30000:1
 #define ANGLE_SCALE 20000
-#define STEPS_PER_RADIAN 200
-int16_t c=ANGLE_SCALE;
+#define STEPS_PER_RADIAN 410
+int16_t c=-ANGLE_SCALE;
 int16_t s=0;
-int16_t x=0, y=0;
+int32_t x=0, y=0; //200000000L;
 
 #define sign(x) ((x)<0?-1:1)
 
@@ -148,20 +148,61 @@ void positionUpdate() {
   if(count2 != last_count2) ticks2(count2 - last_count2);
 }
 
+int32_t err;
+
+// 13_000_000 is about 10 cm
+#define FOLLOW_MAX_Y 13000000L
+#define FOLLOW_MAX_S 15000L
+
+void followLine() {
+  if(c < 0)
+  {
+    // pointed backwards
+    err = (s > 0 ? 50 : -50);
+  }
+  else
+  {
+    int32_t target_s = -max(min(y / 10000 * FOLLOW_MAX_S / (FOLLOW_MAX_Y / 10000), FOLLOW_MAX_S), -FOLLOW_MAX_S);
+    err = (s - target_s)/200;
+    err = max(min(err,50),-50);
+  }
+  if(err > 0)
+    setMotors(100, 100 - err);
+  else
+    setMotors(100 + err, 100);
+}
+
+uint16_t last_millis = 0;
+
 void encoderUpdate() {
   if(last_count1 != count1 || last_count2 != count2)
   {
     positionUpdate();
-    
-    Serial.print(last_count1);
-    Serial.write(" ");
-    Serial.print(last_count2);
-    Serial.write(" ");
-    Serial.print(s);
-    Serial.write(" ");
-    Serial.print(c);
-    Serial.println("");
+    followLine();
   }
+  
+  if(millis() - last_millis > 100)
+  {
+    Serial.print(s);
+    Serial.write(",");
+    Serial.print(c);
+    Serial.write("\t");
+    Serial.print(x);
+    Serial.write(",");
+    Serial.print(y);
+    Serial.write("\t");
+    Serial.print(err);
+    
+    Serial.println("");
+    last_millis += 100;
+  }
+  
+/*  if(s > ANGLE_SCALE/2 || s < -ANGLE_SCALE/2)
+  {
+    setMotors(0,0);
+    Serial.println("Lost");
+    while(1);
+  }*/
   
   if(error1)
   {
