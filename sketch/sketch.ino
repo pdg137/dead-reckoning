@@ -97,8 +97,8 @@ void setMotors(int left, int right)
 
 // 30000:1
 #define ANGLE_SCALE 20000
-#define STEPS_PER_RADIAN 410
-int16_t c=-ANGLE_SCALE;
+#define STEPS_PER_RADIAN 412
+int16_t c=ANGLE_SCALE;
 int16_t s=0;
 int32_t x=0, y=0; //200000000L;
 
@@ -163,13 +163,26 @@ void followLine() {
   else
   {
     int32_t target_s = -max(min(y / 10000 * FOLLOW_MAX_S / (FOLLOW_MAX_Y / 10000), FOLLOW_MAX_S), -FOLLOW_MAX_S);
-    err = (s - target_s)/200;
-    err = max(min(err,50),-50);
+    err = (s - target_s)/100;
+    err = max(min(err,100),-100);
   }
   if(err > 0)
-    setMotors(100, 100 - err);
+    setMotors(120, 120 - err);
   else
-    setMotors(100 + err, 100);
+    setMotors(120 + err, 120);
+}
+
+void transform() {
+  if(x > 70000000L)
+  {
+    x -= 100000000L;
+    int32_t new_y = -x;
+    x = y;
+    y = new_y;
+    int16_t new_s = -c;
+    c = s;
+    s = new_s;
+  }
 }
 
 uint16_t last_millis = 0;
@@ -179,6 +192,7 @@ void encoderUpdate() {
   {
     positionUpdate();
     followLine();
+    transform();
   }
   
   if(millis() - last_millis > 100)
