@@ -5,6 +5,7 @@ int8_t last_count2 = 1;
 uint8_t last11, last12, last21, last22;
 uint8_t error1 = 0;
 uint8_t error2 = 0;
+uint16_t start_millis;
 
 // Encoder 1 uses INT0 and INT1
 ISR(INT1_vect,ISR_ALIASOF(INT0_vect));
@@ -65,6 +66,8 @@ void setup() {
   pinMode(5, OUTPUT);
   
   sei();
+  
+  start_millis = millis();
 }
 
 #define min(a, b) ((a)<(b)?(a):(b))
@@ -100,7 +103,8 @@ void setMotors(int left, int right)
 #define STEPS_PER_RADIAN 412
 int16_t c=ANGLE_SCALE;
 int16_t s=0;
-int32_t x=0, y=0; //200000000L;
+int32_t x=0, y=0L; //200000000L;
+uint8_t state = 0;
 
 #define sign(x) ((x)<0?-1:1)
 
@@ -172,34 +176,46 @@ void followLine() {
     setMotors(120 + err, 120);
 }
 
+// direct-to the origin
 void transform() {
-  if(x > 70000000L)
+  double r = hypot((double)x, (double)y);
+  double nx = (double)x/r;
+  double ny = (double)y/r;
+  int16_t new_c = -nx*c-ny*s;
+  int16_t new_s = ny*c-nx*s;
+  c = new_c;
+  s = new_s;
+  y = 0;
+  x = -r;
+}
+
+void stopWhenClose() {
+  if(x > 0)
   {
-    x -= 100000000L;
-    int32_t new_y = -x;
-    x = y;
-    y = new_y;
-    int16_t new_s = -c;
-    c = s;
-    s = new_s;
+    setMotors(0,0);
+    while(1);
   }
 }
 
 uint16_t last_millis = 0;
+uint8_t led = 0;
 
 void encoderUpdate() {
   if(last_count1 != count1 || last_count2 != count2)
   {
     positionUpdate();
-    followLine();
-    transform();
   }
   
   if(millis() - last_millis > 100)
   {
-    Serial.print(s);
-    Serial.write(",");
+    led = !led;
+    digitalWrite(13, led);
+    
+    Serial.print(millis() - start_millis);
+    Serial.write(" ");
     Serial.print(c);
+    Serial.write(",");
+    Serial.print(s);
     Serial.write("\t");
     Serial.print(x);
     Serial.write(",");
@@ -232,4 +248,17 @@ void encoderUpdate() {
 
 void loop() {
   encoderUpdate();
+  if(state == 1)
+  {
+    followLine();
+    stopWhenClose();
+  }
+  else
+  {
+    if(millis()-start_millis > 10000)
+    {
+      transform();
+      state = 1;
+    }
+  }
 }
