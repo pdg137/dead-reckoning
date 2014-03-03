@@ -158,11 +158,11 @@ int32_t err;
 #define FOLLOW_MAX_Y 13000000L
 #define FOLLOW_MAX_S 15000L
 
-void followLine() {
+void goHome() {
   if(c < 0)
   {
     // pointed backwards
-    err = (s > 0 ? 50 : -50);
+    err = (s > 0 ? 100 : -100);
   }
   else
   {
@@ -246,19 +246,73 @@ void encoderUpdate() {
   }
 }
 
-void loop() {
-  encoderUpdate();
-  if(state == 1)
+int16_t last_p = 0;
+uint16_t last_on_line_millis = 0;
+uint16_t on_line_start_millis = 0;
+
+uint8_t onLine()
+{
+  return analogRead(1) > 700 || analogRead(0) > 700;
+}
+
+void followLine()
+{
+  int16_t s1 = max(analogRead(1), 700) - 700;
+  int16_t s0 = max(analogRead(0), 700) - 700;
+  
+  int16_t p;
+  
+  if(s1 > 0 || s0 > 0)
   {
-    followLine();
-    stopWhenClose();
+    p = 100*(s1 - s0)/(s1+s0); // positive is to the right of the line
+    last_on_line_millis = millis();
+  }
+  else
+    p = last_p;
+  
+  int16_t d = p - last_p;
+  
+  int16_t pid = p + d*10;
+  pid = max(min(pid, 100), -100);
+  if(pid < 0)
+  {
+    setMotors(100, 100 + pid);
   }
   else
   {
-    if(millis()-start_millis > 10000)
+    setMotors(100 - pid, 100);
+  }
+  
+  last_p = p;
+}
+
+void loop() {
+  encoderUpdate();
+  switch(state) {
+  case 0:
+    if(onLine())
+    {
+      state = 1;
+      on_line_start_millis = millis();
+    }
+    setMotors(100,100);
+    break;
+  case 1:
+    followLine();
+    if(millis() - on_line_start_millis > 500)
+      state = 2;
+    break;
+  case 2:
+    followLine();
+    if(millis() - last_on_line_millis > 100)
     {
       transform();
-      state = 1;
+      state = 3;
     }
+    break;
+  case 3:
+    goHome();
+    stopWhenClose();
+    break;    
   }
 }
