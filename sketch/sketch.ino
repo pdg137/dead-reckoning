@@ -9,8 +9,9 @@ uint16_t start_millis;
 
 #define SPEED 100
 #define ANGLE_SCALE 20000
-#define STEPS_PER_RADIAN 404
-#define ENCODER_CALIBRATION1 170
+#define STEPS_PER_RADIAN 414
+#define ENCODER_CALIBRATION1 160
+#define RADIUS 10000000L
 int16_t calibration_count1 = 0;
 int16_t c=ANGLE_SCALE;
 int16_t s=0;
@@ -85,7 +86,7 @@ void setup() {
 #define min(a, b) ((a)<(b)?(a):(b))
 #define max(a, b) ((a)>(b)?(a):(b))
 
-void setMotors(int left, int right)
+void reallySetMotors(int left, int right)
 {
   if(left < 0)
   {
@@ -108,6 +109,23 @@ void setMotors(int left, int right)
     digitalWrite(5, HIGH);
     OCR1B = min(right, 400);
   }
+}
+
+int last_left = 0;
+int last_right = 0;
+void setMotors(int left, int right)
+{
+  if(left > last_left)
+    last_left +=1;
+  else if(left < last_left)
+    last_left -= 1;
+    
+  if(right > last_right)
+    last_right += 1;
+  else if(right < last_right)
+    last_right -= 1;
+    
+  reallySetMotors(last_left, last_right);
 }
 
 #define sign(x) ((x)<0?-1:1)
@@ -187,6 +205,8 @@ void goHome() {
 
 // direct-to the origin
 void transform() {
+  x -= RADIUS;
+  
   double r = hypot((double)x, (double)y);
   double nx = (double)x/r;
   double ny = (double)y/r;
@@ -196,6 +216,8 @@ void transform() {
   s = new_s;
   y = 0;
   x = -r;
+  
+  x += RADIUS;
 }
 
 void stopWhenClose() {
@@ -309,12 +331,12 @@ void loop() {
     break;
   case 1:
     followLine();
-    if(millis() - on_line_start_millis > 500)
+    if(millis() - on_line_start_millis > 2000)
       state = 2;
     break;
   case 2:
     followLine();
-    if(millis() - last_on_line_millis > 100)
+    if(millis() - last_on_line_millis > 200)
     {
       transform();
       state = 3;
