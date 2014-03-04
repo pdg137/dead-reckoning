@@ -7,9 +7,10 @@ uint8_t error1 = 0;
 uint8_t error2 = 0;
 uint16_t start_millis;
 
+#define SPEED 100
 #define ANGLE_SCALE 20000
-#define STEPS_PER_RADIAN 410
-#define ENCODER_CALIBRATION1 150
+#define STEPS_PER_RADIAN 404
+#define ENCODER_CALIBRATION1 170
 int16_t calibration_count1 = 0;
 int16_t c=ANGLE_SCALE;
 int16_t s=0;
@@ -170,18 +171,18 @@ void goHome() {
   if(c < 0)
   {
     // pointed backwards
-    err = (s > 0 ? 100 : -100);
+    err = (s > 0 ? 50 : -50);
   }
   else
   {
     int32_t target_s = -max(min(y / 10000 * FOLLOW_MAX_S / (FOLLOW_MAX_Y / 10000), FOLLOW_MAX_S), -FOLLOW_MAX_S);
     err = (s - target_s)/100;
-    err = max(min(err,100),-100);
+    err = max(min(err,80),-80);
   }
   if(err > 0)
-    setMotors(120, 120 - err);
+    setMotors(SPEED, SPEED - err);
   else
-    setMotors(120 + err, 120);
+    setMotors(SPEED + err, SPEED);
 }
 
 // direct-to the origin
@@ -198,7 +199,7 @@ void transform() {
 }
 
 void stopWhenClose() {
-  if(x > -2000000)
+  if(x > -1500000)
   {
     state = 4;
   }
@@ -212,7 +213,9 @@ void encoderUpdate() {
   {
     positionUpdate();
   }
-  
+}
+
+void debug() {  
   if(millis() - last_millis > 100)
   {
     led = !led;
@@ -280,14 +283,14 @@ void followLine()
   int16_t d = p - last_p;
   
   int16_t pid = p + d*10;
-  pid = max(min(pid, 120), -120);
+  pid = max(min(pid, 80), -80);
   if(pid < 0)
   {
-    setMotors(120, 120 + pid);
+    setMotors(SPEED, SPEED + pid);
   }
   else
   {
-    setMotors(120 - pid, 120);
+    setMotors(SPEED - pid, SPEED);
   }
   
   last_p = p;
