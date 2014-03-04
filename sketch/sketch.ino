@@ -7,6 +7,15 @@ uint8_t error1 = 0;
 uint8_t error2 = 0;
 uint16_t start_millis;
 
+#define ANGLE_SCALE 20000
+#define STEPS_PER_RADIAN 410
+#define ENCODER_CALIBRATION1 150
+int16_t calibration_count1 = 0;
+int16_t c=ANGLE_SCALE;
+int16_t s=0;
+int32_t x=0, y=0;
+uint8_t state = 0;
+
 // Encoder 1 uses INT0 and INT1
 ISR(INT1_vect,ISR_ALIASOF(INT0_vect));
 ISR(INT0_vect)
@@ -68,6 +77,8 @@ void setup() {
   sei();
   
   start_millis = millis();
+  
+  delay(200);
 }
 
 #define min(a, b) ((a)<(b)?(a):(b))
@@ -98,14 +109,6 @@ void setMotors(int left, int right)
   }
 }
 
-// 30000:1
-#define ANGLE_SCALE 20000
-#define STEPS_PER_RADIAN 412
-int16_t c=ANGLE_SCALE;
-int16_t s=0;
-int32_t x=0, y=0L; //200000000L;
-uint8_t state = 0;
-
 #define sign(x) ((x)<0?-1:1)
 
 int16_t divide(int16_t a, int16_t b)
@@ -126,14 +129,19 @@ void ticks1(int8_t n) {
 //  c = max(-ANGLE_SCALE, min(ANGLE_SCALE, c));
 //  s = max(-ANGLE_SCALE, min(ANGLE_SCALE, s));
   
-  last_count1 += n;  
+  last_count1 += n;
+  
+  // do it again every X times
+  calibration_count1 ++;
+  if(calibration_count1 >= ENCODER_CALIBRATION1 || calibration_count1 <= -ENCODER_CALIBRATION1)
+  {
+    last_count1 -= n;
+    calibration_count1 = 0;
+  }
 }
 
 void ticks2(int8_t n) {
-  if(n > 1)
-    n = 1;
-  if(n < -1)
-    n = -1;
+  n = sign(n);
   
   int16_t dc = - divide(n*s + n*c/2/STEPS_PER_RADIAN, STEPS_PER_RADIAN);
   int16_t ds = + divide(n*c - n*s/2/STEPS_PER_RADIAN, STEPS_PER_RADIAN);
@@ -190,10 +198,9 @@ void transform() {
 }
 
 void stopWhenClose() {
-  if(x > 0)
+  if(x > -2000000)
   {
-    setMotors(0,0);
-    while(1);
+    state = 4;
   }
 }
 
@@ -273,14 +280,14 @@ void followLine()
   int16_t d = p - last_p;
   
   int16_t pid = p + d*10;
-  pid = max(min(pid, 100), -100);
+  pid = max(min(pid, 120), -120);
   if(pid < 0)
   {
-    setMotors(100, 100 + pid);
+    setMotors(120, 120 + pid);
   }
   else
   {
-    setMotors(100 - pid, 100);
+    setMotors(120 - pid, 120);
   }
   
   last_p = p;
@@ -313,6 +320,9 @@ void loop() {
   case 3:
     goHome();
     stopWhenClose();
-    break;    
+    break;
+  case 4:
+    setMotors(0,0);
+    break;  
   }
 }
