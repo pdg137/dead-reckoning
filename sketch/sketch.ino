@@ -11,6 +11,13 @@ uint32_t error2 = 0;
 #define STEPS_PER_RADIAN 410
 #define ENCODER_CALIBRATION1 160
 #define RADIUS 10000000L
+#define FOLLOW_MAX_Y 13000000L
+#define FOLLOW_MAX_S 15000L
+
+#define sign(x) ((x)<0?-1:1)
+#define min(a, b) ((a)<(b)?(a):(b))
+#define max(a, b) ((a)>(b)?(a):(b))
+
 int16_t calibration_count1 = 0;
 int16_t c=ANGLE_SCALE;
 int16_t s=0;
@@ -48,12 +55,6 @@ ISR(PCINT0_vect)
   last22 = new22;
 }
 
-ISR(PCINT1_vect,ISR_ALIASOF(PCINT0_vect));
-ISR(PCINT2_vect,ISR_ALIASOF(PCINT0_vect));
-#ifdef PCINT3_vect
-ISR(PCINT3_vect,ISR_ALIASOF(PCINT0_vect));
-#endif
-
 void setup() {
   // put your setup code here, to run once:
   pinMode(13, OUTPUT);
@@ -77,15 +78,12 @@ void setup() {
   
   sei();
   
-  reallySetMotors(0,0);
+  setMotors(0,0);
   
   delay(200);
 }
 
-#define min(a, b) ((a)<(b)?(a):(b))
-#define max(a, b) ((a)>(b)?(a):(b))
-
-void reallySetMotors(int left, int right)
+void setMotors(int left, int right)
 {
   if(left < 0)
   {
@@ -109,30 +107,6 @@ void reallySetMotors(int left, int right)
     OCR1B = min(right, 400);
   }
 }
-
-int last_left = 0;
-int last_right = 0;
-uint16_t last_set_millis = 0;
-void setMotors(int left, int right)
-{
-  if(millis() - last_set_millis < 2)
-    return;
-  last_set_millis = millis();
-  
-  if(left > last_left)
-    last_left +=1;
-  else if(left < last_left)
-    last_left -= 1;
-    
-  if(right > last_right)
-    last_right += 1;
-  else if(right < last_right)
-    last_right -= 1;
-    
-  reallySetMotors(last_left, last_right);
-}
-
-#define sign(x) ((x)<0?-1:1)
 
 int16_t divide(int16_t a, int16_t b)
 {
@@ -179,14 +153,10 @@ void positionUpdate() {
   if(count2 != last_count2) ticks2(count2 - last_count2);
 }
 
-int32_t err;
-
-// 13_000_000 is about 10 cm
-#define FOLLOW_MAX_Y 13000000L
-#define FOLLOW_MAX_S 15000L
-
 void goHome() {
   int16_t speed = SPEED;
+  int32_t err;
+  
   if(x > -20000000)
     speed = speed/2;
   
@@ -196,8 +166,7 @@ void goHome() {
     err = (s > 0 ? speed/2 : -speed/2);
   }
   else
-  {
-    
+  {    
     int32_t target_s = -max(min(y / 10000 * FOLLOW_MAX_S / (FOLLOW_MAX_Y / 10000), FOLLOW_MAX_S), -FOLLOW_MAX_S);
     err = (s - target_s)/100;
     err = max(min(err,speed),-speed);
@@ -344,7 +313,7 @@ void loop() {
     break;
   case 3:
     followLine();
-    if(millis() - last_on_line_millis > 200)
+    if(millis() - last_on_line_millis > 500)
     {
       transform();
       state++;
