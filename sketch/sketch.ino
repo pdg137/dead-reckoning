@@ -149,8 +149,6 @@ void ticks1(int8_t n) {
   s += ds;
   x += n * c;
   y += n * s;
-//  c = max(-ANGLE_SCALE, min(ANGLE_SCALE, c));
-//  s = max(-ANGLE_SCALE, min(ANGLE_SCALE, s));
   
   last_count1 += n;
   
@@ -172,8 +170,6 @@ void ticks2(int8_t n) {
   s += ds;
   x += n * c;
   y += n * s;
-//  c = max(-ANGLE_SCALE, min(ANGLE_SCALE, c));
-//  s = max(-ANGLE_SCALE, min(ANGLE_SCALE, s));
   
   last_count2 += n;
 }
@@ -335,7 +331,7 @@ void loop() {
     break;
   case 1:
     if(onLine())
-    {
+      {
       state++;
       on_line_start_millis = millis();
     }
