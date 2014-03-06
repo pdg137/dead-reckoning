@@ -224,6 +224,11 @@ int16_t readLine()
     last_on_line_millis = millis();
     last_value = 1000*(int32_t)(s1 - s0)/(s1+s0); // positive is to the right of the line
   }
+  else
+  {
+    // lost line
+    last_value = sign(last_value)*1000;
+  }
   return last_value;
 }
 
@@ -308,7 +313,7 @@ void loop() {
     break;
   case 2:
     followLine();
-    if(millis() - on_line_start_millis > 2000)
+    if(millis() - on_line_start_millis > 5000)
       state++;
     break;
   case 3:
