@@ -5,7 +5,6 @@ int8_t last_count2 = 1;
 uint8_t last11, last12, last21, last22;
 uint32_t error1 = 0;
 uint32_t error2 = 0;
-uint16_t start_millis;
 
 #define SPEED 100
 #define ANGLE_SCALE 20000
@@ -78,7 +77,7 @@ void setup() {
   
   sei();
   
-  start_millis = millis();
+  reallySetMotors(0,0);
   
   delay(200);
 }
@@ -230,13 +229,6 @@ void transform() {
   x += RADIUS;
 }
 
-void stopWhenClose() {
-  if(x > -1500000)
-  {
-    state = 4;
-  }
-}
-
 uint16_t last_millis = 0;
 uint8_t led = 0;
 
@@ -295,18 +287,24 @@ void followLine()
   last_p = p;
 }
 
+uint16_t getBatteryVoltage_mv() {
+  return analogRead(2) * 10;
+}
+
 void debug() {  
   if(millis() - last_millis > 100)
   {
     led = !led;
     digitalWrite(13, led);
     
+    Serial.print(getBatteryVoltage_mv());
+    Serial.write("mV\t");
     Serial.print(readLine());
     Serial.write(" ");
     Serial.print(analogRead(0));
     Serial.write(" ");
     Serial.print(analogRead(1));
-    Serial.write(" ");
+    Serial.write("\t");
     Serial.print(c);
     Serial.write(",");
     Serial.print(s);
@@ -325,34 +323,45 @@ void debug() {
 }
 
 void loop() {
+  static uint16_t battery_voltage_low_millis = 0;
   encoderUpdate();
   switch(state) {
   case 0:
+    if(getBatteryVoltage_mv() < 3000)
+      battery_voltage_low_millis = millis();
+    if(millis() - battery_voltage_low_millis > 1000)
+      state++;
+    debug();
+    break;
+  case 1:
     if(onLine())
     {
-      state = 1;
+      state++;
       on_line_start_millis = millis();
     }
     setMotors(100,100);
     break;
-  case 1:
+  case 2:
     followLine();
     if(millis() - on_line_start_millis > 2000)
-      state = 2;
+      state++;
     break;
-  case 2:
+  case 3:
     followLine();
     if(millis() - last_on_line_millis > 200)
     {
       transform();
-      state = 3;
+      state++;
     }
     break;
-  case 3:
-    goHome();
-    stopWhenClose();
-    break;
   case 4:
+    goHome();
+    if(x > -1500000)
+    {
+      state++;
+    }
+    break;
+  case 5:
     setMotors(0,0);
     debug();
     break;
