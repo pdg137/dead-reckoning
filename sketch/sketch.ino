@@ -3,13 +3,13 @@ int8_t count2 = 0;
 int8_t last_count1 = 1;
 int8_t last_count2 = 1;
 uint8_t last11, last12, last21, last22;
-uint8_t error1 = 0;
-uint8_t error2 = 0;
+uint32_t error1 = 0;
+uint32_t error2 = 0;
 uint16_t start_millis;
 
 #define SPEED 100
 #define ANGLE_SCALE 20000
-#define STEPS_PER_RADIAN 414
+#define STEPS_PER_RADIAN 410
 #define ENCODER_CALIBRATION1 160
 #define RADIUS 10000000L
 int16_t calibration_count1 = 0;
@@ -28,7 +28,7 @@ ISR(INT0_vect)
   count1 += (last11 ^ new12) - (int)(new11 ^ last12);
   
   if((last11 ^ new11) & (last12 ^ new12))
-    error1 = 1;
+    error1 ++;
     
   last11 = new11;
   last12 = new12;
@@ -43,7 +43,7 @@ ISR(PCINT0_vect)
   count2 += (last21 ^ new22) - (int)(new21 ^ last22);  
   
   if((last21 ^ new21) & (last22 ^ new22))
-    error2 = 1;
+    error2 ++;
   
   last21 = new21;
   last22 = new22;
@@ -113,8 +113,13 @@ void reallySetMotors(int left, int right)
 
 int last_left = 0;
 int last_right = 0;
+uint16_t last_set_millis = 0;
 void setMotors(int left, int right)
 {
+  if(millis() - last_set_millis < 2)
+    return;
+  last_set_millis = millis();
+  
   if(left > last_left)
     last_left +=1;
   else if(left < last_left)
@@ -186,21 +191,26 @@ int32_t err;
 #define FOLLOW_MAX_S 15000L
 
 void goHome() {
+  int16_t speed = SPEED;
+  if(x > -20000000)
+    speed = speed/2;
+  
   if(c < 0)
   {
     // pointed backwards
-    err = (s > 0 ? 50 : -50);
+    err = (s > 0 ? speed/2 : -speed/2);
   }
   else
   {
+    
     int32_t target_s = -max(min(y / 10000 * FOLLOW_MAX_S / (FOLLOW_MAX_Y / 10000), FOLLOW_MAX_S), -FOLLOW_MAX_S);
     err = (s - target_s)/100;
-    err = max(min(err,80),-80);
+    err = max(min(err,speed),-speed);
   }
   if(err > 0)
-    setMotors(SPEED, SPEED - err);
+    setMotors(speed, speed - err);
   else
-    setMotors(SPEED + err, SPEED);
+    setMotors(speed + err, speed);
 }
 
 // direct-to the origin
@@ -237,48 +247,6 @@ void encoderUpdate() {
   }
 }
 
-void debug() {  
-  if(millis() - last_millis > 100)
-  {
-    led = !led;
-    digitalWrite(13, led);
-    
-    Serial.print(millis() - start_millis);
-    Serial.write(" ");
-    Serial.print(c);
-    Serial.write(",");
-    Serial.print(s);
-    Serial.write("\t");
-    Serial.print(x);
-    Serial.write(",");
-    Serial.print(y);
-    Serial.write("\t");
-    Serial.print(err);
-    
-    Serial.println("");
-    last_millis += 100;
-  }
-  
-/*  if(s > ANGLE_SCALE/2 || s < -ANGLE_SCALE/2)
-  {
-    setMotors(0,0);
-    Serial.println("Lost");
-    while(1);
-  }*/
-  
-  if(error1)
-  {
-    Serial.println("Error 1");
-    error1 = 0;
-  }
-  if(error2)
-  {
-    Serial.println("Error 2");
-    error2 = 0;
-  }
-}
-
-int16_t last_p = 0;
 uint16_t last_on_line_millis = 0;
 uint16_t on_line_start_millis = 0;
 
@@ -287,25 +255,34 @@ uint8_t onLine()
   return analogRead(1) > 700 || analogRead(0) > 700;
 }
 
+int16_t readLine()
+{  
+  int16_t s1 = max(analogRead(1), 640) - 640;
+  int16_t s0 = max(analogRead(0), 640) - 640;
+  
+  static int16_t last_value = 0;
+  
+  if(s1 > 20 || s0 > 20)
+  {
+    last_on_line_millis = millis();
+    last_value = 1000*(int32_t)(s1 - s0)/(s1+s0); // positive is to the right of the line
+  }
+  return last_value;
+}
+
 void followLine()
 {
-  int16_t s1 = max(analogRead(1), 700) - 700;
-  int16_t s0 = max(analogRead(0), 700) - 700;
-  
-  int16_t p;
-  
-  if(s1 > 0 || s0 > 0)
-  {
-    p = 100*(s1 - s0)/(s1+s0); // positive is to the right of the line
-    last_on_line_millis = millis();
-  }
-  else
-    p = last_p;
-  
+  static int16_t last_p = 0;
+  int16_t p = readLine();
   int16_t d = p - last_p;
+  last_p = p;
+  static int32_t i = 0;
   
-  int16_t pid = p + d*10;
-  pid = max(min(pid, 80), -80);
+  i += p;
+  i = max(min(p, 1000000), -1000000);
+  
+  int16_t pid = p/15 + d*5 + i/50;
+  pid = max(min(pid, SPEED), -SPEED);
   if(pid < 0)
   {
     setMotors(SPEED, SPEED + pid);
@@ -316,6 +293,35 @@ void followLine()
   }
   
   last_p = p;
+}
+
+void debug() {  
+  if(millis() - last_millis > 100)
+  {
+    led = !led;
+    digitalWrite(13, led);
+    
+    Serial.print(readLine());
+    Serial.write(" ");
+    Serial.print(analogRead(0));
+    Serial.write(" ");
+    Serial.print(analogRead(1));
+    Serial.write(" ");
+    Serial.print(c);
+    Serial.write(",");
+    Serial.print(s);
+    Serial.write("\t");
+    Serial.print(x);
+    Serial.write(",");
+    Serial.print(y);
+    Serial.write("\t");
+    Serial.print(error1);
+    Serial.write(",");  
+    Serial.print(error2);
+    
+    Serial.println("");
+    last_millis += 100;
+  }
 }
 
 void loop() {
@@ -348,6 +354,7 @@ void loop() {
     break;
   case 4:
     setMotors(0,0);
-    break;  
+    debug();
+    break;
   }
 }
